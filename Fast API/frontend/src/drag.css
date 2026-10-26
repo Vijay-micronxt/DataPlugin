@@ -1,0 +1,3 @@
+.chat-widget header{cursor:grab;touch-action:none;user-select:none}
+.chat-widget header:active{cursor:grabbing}
+.chat-widget header button,.chat-widget header select{cursor:pointer;touch-action:auto}

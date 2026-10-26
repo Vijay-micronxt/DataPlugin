@@ -1,0 +1,29 @@
+# Environment files may contain credentials. Keep only example templates.
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Local databases and generated analytics snapshots
+*.duckdb
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+
+# Python artifacts and environments
+__pycache__/
+*.py[cod]
+*.venv/
+venv/
+
+# Frontend dependencies and generated output
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# Editor-specific local settings
+.vscode/
