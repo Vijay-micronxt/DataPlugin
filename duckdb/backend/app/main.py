@@ -796,20 +796,27 @@ def inventory_alerts(
 
 @app.get("/api/reports/store-feedback")
 def store_feedback(
-    start_date: date = Query(..., description="First included feedback date, YYYY-MM-DD"),
-    end_date: date = Query(..., description="Last included feedback date, YYYY-MM-DD"),
+    start_date: date | None = Query(None, description="Optional first included feedback date, YYYY-MM-DD"),
+    end_date: date | None = Query(None, description="Optional last included feedback date, YYYY-MM-DD"),
     store_ids: list[int] | None = Query(None, alias="store_id", description="Optional repeated store filter"),
     rating: int | None = Query(None, ge=1, le=5),
     search: str = Query("", max_length=200),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ) -> dict[str, Any]:
-    """Return a review feed and rating summary for the selected stores/date range."""
-    if start_date > end_date:
+    """Return a review feed and rating summary, across all dates/stores by default."""
+    if (start_date is None) != (end_date is None):
+        raise HTTPException(status_code=422, detail="start_date and end_date must be provided together")
+    if start_date is not None and end_date is not None and start_date > end_date:
         raise HTTPException(status_code=422, detail="start_date must be on or before end_date")
     store_filter, store_params = store_filter_sql("store_id", store_ids)
-    base_where = f"feedback_created_at >= ? AND feedback_created_at < DATE_ADD(?, INTERVAL 1 DAY){store_filter}"
-    base_params = [start_date, end_date, *store_params]
+    date_filter = ""
+    date_params: list[Any] = []
+    if start_date is not None and end_date is not None:
+        date_filter = " AND feedback_created_at >= ? AND feedback_created_at < DATE_ADD(?, INTERVAL 1 DAY)"
+        date_params = [start_date, end_date]
+    base_where = f"1=1{date_filter}{store_filter}"
+    base_params = [*date_params, *store_params]
     details_where = base_where
     details_params = list(base_params)
     if rating is not None:
@@ -834,11 +841,10 @@ def store_feedback(
             base_params,
         ).fetchone()
         store_rows = con.execute(
-            """SELECT store_id, MAX(store_name), COUNT(*), AVG(rating)
-               FROM store_feedback_details
-               WHERE feedback_created_at >= ? AND feedback_created_at < DATE_ADD(?, INTERVAL 1 DAY)
-               GROUP BY store_id ORDER BY MAX(store_name), store_id""",
-            [start_date, end_date],
+            f"""SELECT store_id, MAX(store_name), COUNT(*), AVG(rating)
+                FROM store_feedback_details WHERE {base_where}
+                GROUP BY store_id ORDER BY MAX(store_name), store_id""",
+            base_params,
         ).fetchall()
         total = con.execute(
             f"SELECT COUNT(*) FROM store_feedback_details WHERE {details_where}", details_params,
@@ -856,6 +862,7 @@ def store_feedback(
         con.close()
 
     return {
+        "start_date": start_date, "end_date": end_date,
         "summary": {
             "total": int(summary[0] or 0),
             "average_rating": float(summary[1] or 0),

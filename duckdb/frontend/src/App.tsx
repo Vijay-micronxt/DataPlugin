@@ -453,32 +453,23 @@ function InventoryAlertTables({ report, loading, offset, onOffsetChange }: {
   </section>;
 }
 
-function StoreFeedbackReviews({ startDate, endDate, storeIds, refreshKey, stores }: {
-  startDate: string;
-  endDate: string;
-  storeIds: string[];
+function StoreFeedbackReviews({ refreshKey, stores }: {
   refreshKey: number;
   stores: Metadata["stores"];
 }) {
   const [report, setReport] = useState<StoreFeedbackReport | null>(null);
-  const [search, setSearch] = useState("");
-  const [rating, setRating] = useState<"all" | "1" | "2" | "3" | "4" | "5">("all");
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!startDate || !endDate) return;
     let active = true;
     const timer = window.setTimeout(() => {
       const load = async () => {
         setLoading(true);
         setError("");
         try {
-          const params = new URLSearchParams({ start_date: startDate, end_date: endDate, limit: "100", offset: String(offset) });
-          if (rating !== "all") params.set("rating", rating);
-          if (search.trim()) params.set("search", search.trim());
-          storeIds.forEach((storeId) => params.append("store_id", storeId));
+          const params = new URLSearchParams({ limit: "100", offset: String(offset) });
           const response = await fetch(`${API_BASE}/api/reports/store-feedback?${params}`, { cache: "no-store" });
           if (!response.ok) {
             const body = await response.json().catch(() => null);
@@ -495,17 +486,13 @@ function StoreFeedbackReviews({ startDate, endDate, storeIds, refreshKey, stores
       void load();
     }, 250);
     return () => { active = false; window.clearTimeout(timer); };
-  }, [startDate, endDate, storeIds, search, rating, offset, refreshKey]);
-
-  useEffect(() => { setOffset(0); }, [startDate, endDate, storeIds, search, rating]);
+  }, [offset, refreshKey]);
 
   const summary = report?.summary;
   const average = summary?.average_rating ?? 0;
   const page = report?.reviews ?? [];
   const storeRatingById = new Map((report?.stores ?? []).map((store) => [store.store_id, store]));
-  const visibleStores = [...stores]
-    .filter((store) => !storeIds.length || storeIds.includes(String(store.store_id)))
-    .sort((a, b) => a.store_name.localeCompare(b.store_name));
+  const visibleStores = [...stores].sort((a, b) => a.store_name.localeCompare(b.store_name));
   const reviewsByStore = new Map<number, StoreFeedbackReview[]>();
   for (const review of page) reviewsByStore.set(review.store_id, [...(reviewsByStore.get(review.store_id) ?? []), review]);
   return <section className="store-reviews-page">
@@ -514,7 +501,7 @@ function StoreFeedbackReviews({ startDate, endDate, storeIds, refreshKey, stores
         <span className="panel-kicker">CUSTOMER RATING</span>
         <strong>{average.toFixed(1)} <small>/ 5</small></strong>
         <span className="store-review-stars" aria-label={`${average.toFixed(1)} out of 5 stars`}>{"★".repeat(Math.round(average))}{"☆".repeat(5 - Math.round(average))}</span>
-        <small>{number(summary?.total ?? 0)} reviews in this date and store selection</small>
+        <small>{number(summary?.total ?? 0)} reviews across all stores</small>
       </div>
       <div className="store-reviews-distribution" aria-label="Rating distribution">
         {[5, 4, 3, 2, 1].map((star) => {
@@ -524,11 +511,6 @@ function StoreFeedbackReviews({ startDate, endDate, storeIds, refreshKey, stores
         })}
       </div>
     </section>
-    <div className="store-reviews-toolbar">
-      <label><span>Search reviews</span><input type="search" value={search} placeholder="Search comments, customers, stores" onChange={(event) => { setSearch(event.target.value); setOffset(0); }} /></label>
-      <label><span>Rating</span><select value={rating} onChange={(event) => { setRating(event.target.value as typeof rating); setOffset(0); }}><option value="all">All ratings</option><option value="5">5 stars</option><option value="4">4 stars</option><option value="3">3 stars</option><option value="2">2 stars</option><option value="1">1 star</option></select></label>
-      <span className="store-reviews-result-count">{number(report?.total ?? 0)} matching reviews</span>
-    </div>
     {error ? <div className="error-banner" role="alert"><span>!</span>{error}</div> : null}
     <div className="store-review-feed">
       {loading && !report ? <div className="panel store-review-empty">Loading store reviews…</div> : visibleStores.map((store) => {
@@ -548,10 +530,10 @@ function StoreFeedbackReviews({ startDate, endDate, storeIds, refreshKey, stores
             <div className="store-review-card-rating"><span className="store-review-stars" aria-label={`${review.rating} out of 5 stars`}>{"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}</span><span>{review.rating} out of 5</span></div>
             {review.description ? <p className="store-review-description">{review.description}</p> : null}
             <div className="store-review-card-footer">{review.order_id != null ? <span>Order #{review.order_id}</span> : null}</div>
-          </article>) : <div className="store-review-group-empty">{storeSummary?.review_count ? "No reviews for this store on the current page or matching filters." : "No reviews for this store in the selected date range."}</div>}
+          </article>) : <div className="store-review-group-empty">{storeSummary?.review_count ? "No reviews for this store on the current page." : "No reviews for this store yet."}</div>}
         </section>;
       })}
-      {!loading && !error && !visibleStores.length ? <div className="panel store-review-empty">No stores match the selected filter.</div> : null}
+      {!loading && !error && !visibleStores.length ? <div className="panel store-review-empty">No stores are available.</div> : null}
     </div>
     <div className="store-reviews-pagination"><span>Showing {page.length ? `${offset + 1}–${offset + page.length}` : "0"} of {number(report?.total ?? 0)} reviews</span><div>
       <button type="button" disabled={loading || offset === 0} onClick={() => setOffset((current) => Math.max(0, current - 100))}>Previous</button>
@@ -1427,7 +1409,7 @@ export default function App() {
         <div>
           <div className="eyebrow">{activeSection === "tables" ? "MYSQL DATABASE" : activeSection === "sku" ? "PRODUCT PERFORMANCE" : activeSection === "store" ? "STORE PERFORMANCE" : activeSection === "inventory" ? "INVENTORY + SALES" : activeSection === "food-type" ? "CATEGORY PERFORMANCE" : activeSection === "hourly" || activeSection === "store-hourly" ? "SALES TIMING" : activeSection === "customers" ? "CUSTOMER PERFORMANCE" : activeSection === "repeat-customers" ? "CUSTOMER MIX" : activeSection === "store-reviews" ? "CUSTOMER FEEDBACK" : activeSection === "customer-journey" ? "CUSTOMER JOURNEY" : "INVENTORY ALERT"}</div>
           <h1>{activeSection === "tables" ? "Tables in MySQL" : activeSection === "sku" ? "Top selling SKUs" : activeSection === "store" ? "Store performance" : activeSection === "inventory" ? "Available stock and total sales" : activeSection === "food-type" ? "Sales by food type" : activeSection === "hourly" ? "Hourly sales by hour" : activeSection === "store-hourly" ? "Sales by store and hour" : activeSection === "customers" ? "Top customers" : activeSection === "repeat-customers" ? "Repeat and one-time customers" : activeSection === "inventory-alerts" ? "Inventory alert tables" : activeSection === "store-reviews" ? "Store Reviews" : activeSection === "customer-journey" ? "Customer Journey" : "High inventory, low sales"}</h1>
-          <p>{activeSection === "tables" ? "Browse the tables, columns, and latest rows from your configured MySQL database." : activeSection === "sku" ? "Compare top products by quantity and sales value." : activeSection === "store" ? "Compare store sales, orders, and quantity from MySQL." : activeSection === "inventory" ? "Compare on-hand quantities with the 30-day sales values in MySQL." : activeSection === "food-type" ? "See how sales value is distributed across food types." : activeSection === "hourly" ? "See total sales value by hour; the MySQL hourly table does not include store IDs." : activeSection === "store-hourly" ? "Explore hourly sales patterns for each store in a pivot-style heatmap." : activeSection === "customers" ? "Compare your top customers by order count and sales value." : activeSection === "repeat-customers" ? "See the customer mix from repeat_nonrepeated_customers." : activeSection === "inventory-alerts" ? "Review slow-moving overstock and fast-selling low-stock SKU / store pairs." : activeSection === "store-reviews" ? "Read customer ratings and feedback for the selected stores and dates." : activeSection === "customer-journey" ? "See the latest customer counts across Cart, Order, and Payment." : "Rank high-stock SKU / store pairs using 30-day sales from MySQL."}</p>
+          <p>{activeSection === "tables" ? "Browse the tables, columns, and latest rows from your configured MySQL database." : activeSection === "sku" ? "Compare top products by quantity and sales value." : activeSection === "store" ? "Compare store sales, orders, and quantity from MySQL." : activeSection === "inventory" ? "Compare on-hand quantities with the 30-day sales values in MySQL." : activeSection === "food-type" ? "See how sales value is distributed across food types." : activeSection === "hourly" ? "See total sales value by hour; the MySQL hourly table does not include store IDs." : activeSection === "store-hourly" ? "Explore hourly sales patterns for each store in a pivot-style heatmap." : activeSection === "customers" ? "Compare your top customers by order count and sales value." : activeSection === "repeat-customers" ? "See the customer mix from repeat_nonrepeated_customers." : activeSection === "inventory-alerts" ? "Review slow-moving overstock and fast-selling low-stock SKU / store pairs." : activeSection === "store-reviews" ? "Browse customer ratings and comments from all stores." : activeSection === "customer-journey" ? "See the latest customer counts across Cart, Order, and Payment." : "Rank high-stock SKU / store pairs using 30-day sales from MySQL."}</p>
         </div>
         {activeSection !== "customer-journey" ? <div className="freshness">
           <span className="freshness-label">LATEST SALES DATA</span>
@@ -1435,7 +1417,7 @@ export default function App() {
         </div> : null}
       </section>
 
-      {activeSection === "customer-journey" ? <section className="filter-card customer-journey-store-filter" aria-label="Customer journey store filter">
+      {activeSection === "store-reviews" ? null : activeSection === "customer-journey" ? <section className="filter-card customer-journey-store-filter" aria-label="Customer journey store filter">
         <div className="filter-heading"><div><span className="filter-icon" aria-hidden="true">⌖</span><strong>Store filter</strong></div><span className="filter-hint">Snapshot data · no date field</span></div>
         <div className="filter-controls"><StorePicker stores={metadata?.stores ?? []} value={storeIds} onChange={setStoreIds} /></div>
       </section> : activeSection !== "tables" ? <section className="filter-card" aria-label="Report filters">
@@ -1470,7 +1452,7 @@ export default function App() {
 
       {error ? <div className="error-banner" role="alert"><span>!</span>{error}</div> : null}
 
-      {activeSection === "tables" ? <DatabaseTableBrowser tables={databaseTables} selectedTable={selectedTable} onSelect={(name) => { setSelectedTable(name); setTableOffset(0); }} preview={tablePreview} offset={tableOffset} onOffsetChange={setTableOffset} loading={tablesLoading} error={tableError} syncStatus={syncStatus} /> : activeSection === "inventory-alerts" ? <InventoryAlertTables report={inventoryAlertsReport} loading={loading} offset={inventoryAlertOffset} onOffsetChange={(offset) => void changeInventoryAlertPage(offset)} /> : activeSection === "store-reviews" ? <StoreFeedbackReviews startDate={startDate} endDate={endDate} storeIds={storeIds} refreshKey={storeReviewsRefreshKey} stores={metadata?.stores ?? []} /> : activeSection === "customer-journey" ? <CustomerJourneyPage storeIds={storeIds} refreshKey={customerJourneyRefreshKey} /> : activeSection === "sku" ? <>
+      {activeSection === "tables" ? <DatabaseTableBrowser tables={databaseTables} selectedTable={selectedTable} onSelect={(name) => { setSelectedTable(name); setTableOffset(0); }} preview={tablePreview} offset={tableOffset} onOffsetChange={setTableOffset} loading={tablesLoading} error={tableError} syncStatus={syncStatus} /> : activeSection === "inventory-alerts" ? <InventoryAlertTables report={inventoryAlertsReport} loading={loading} offset={inventoryAlertOffset} onOffsetChange={(offset) => void changeInventoryAlertPage(offset)} /> : activeSection === "store-reviews" ? <StoreFeedbackReviews refreshKey={storeReviewsRefreshKey} stores={metadata?.stores ?? []} /> : activeSection === "customer-journey" ? <CustomerJourneyPage storeIds={storeIds} refreshKey={customerJourneyRefreshKey} /> : activeSection === "sku" ? <>
       <section className="panel trend-panel">
         <div className="panel-heading trend-heading">
           <div><span className="panel-kicker">{reportView === "chart" ? "QUANTITY + SALES VALUE" : "TOP SKU REPORTS"}</span><h2>{reportView === "chart" ? "Top SKU trends" : "Top SKU tables"}</h2></div>
