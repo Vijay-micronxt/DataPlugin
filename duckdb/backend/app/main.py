@@ -189,16 +189,21 @@ def metadata() -> dict[str, Any]:
         row = con.execute(
             "SELECT MIN(sold_date), MAX(sold_date) FROM top_selling_skus"
         ).fetchone()
-        stores = con.execute(
-            """SELECT store_id, COALESCE(MAX(store_name), 'Unknown store')
-               FROM (
-                   SELECT store_id, store_name FROM store_performance
+        store_map = {
+            int(store_id): store_name or "Unknown store"
+            for store_id, store_name in con.execute(
+                """SELECT store_id, MAX(store_name) FROM store_performance
                    WHERE store_id IS NOT NULL AND store_id <> 0
-                   UNION ALL
-                   SELECT store_id, store_name FROM customer_journey WHERE store_id <> 0
-               ) AS all_stores
-               GROUP BY store_id ORDER BY MAX(store_name), store_id"""
+                   GROUP BY store_id"""
+            ).fetchall()
+        }
+        journey_stores = con.execute(
+            """SELECT store_id, MAX(store_name) FROM customer_journey
+               WHERE store_id <> 0 GROUP BY store_id"""
         ).fetchall()
+        for store_id, store_name in journey_stores:
+            store_map[int(store_id)] = store_name or store_map.get(int(store_id), "Unknown store")
+        stores = sorted(store_map.items(), key=lambda store: (store[1].casefold(), store[0]))
     except Exception as exc:
         raise HTTPException(status_code=500, detail="Could not read sales date coverage.") from exc
     finally:
