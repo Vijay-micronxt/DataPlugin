@@ -492,7 +492,13 @@ function StoreFeedbackReviews({ refreshKey, stores }: {
   const average = summary?.average_rating ?? 0;
   const page = report?.reviews ?? [];
   const storeRatingById = new Map((report?.stores ?? []).map((store) => [store.store_id, store]));
-  const visibleStores = [...stores].sort((a, b) => a.store_name.localeCompare(b.store_name));
+  const visibleStores = [...stores].sort((a, b) => {
+    const ratingA = storeRatingById.get(a.store_id);
+    const ratingB = storeRatingById.get(b.store_id);
+    return (ratingB?.average_rating ?? 0) - (ratingA?.average_rating ?? 0)
+      || (ratingB?.review_count ?? 0) - (ratingA?.review_count ?? 0)
+      || a.store_name.localeCompare(b.store_name);
+  });
   const reviewsByStore = new Map<number, StoreFeedbackReview[]>();
   for (const review of page) reviewsByStore.set(review.store_id, [...(reviewsByStore.get(review.store_id) ?? []), review]);
   return <section className="store-reviews-page">
