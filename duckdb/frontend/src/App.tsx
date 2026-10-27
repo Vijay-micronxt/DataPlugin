@@ -560,9 +560,11 @@ function StoreFeedbackReviews({ startDate, endDate, storeIds, refreshKey, stores
   </section>;
 }
 
-function CustomerJourneyPage({ storeIds, refreshKey }: {
+function CustomerJourneyPage({ storeIds, refreshKey, view, onViewChange }: {
   storeIds: string[];
   refreshKey: number;
+  view: "chart" | "table";
+  onViewChange: (view: "chart" | "table") => void;
 }) {
   const [report, setReport] = useState<CustomerJourneyReport | null>(null);
   const [loading, setLoading] = useState(false);
@@ -605,8 +607,8 @@ function CustomerJourneyPage({ storeIds, refreshKey }: {
   return <section className="customer-journey-page">
     {error ? <div className="error-banner" role="alert"><span>!</span>{error}</div> : null}
     <article className="panel customer-journey-chart-panel">
-      <div className="customer-journey-chart-heading"><div><span className="panel-kicker">{report?.scope === "selected_stores" ? (report.store_count === 1 ? report.store_name : `${number(report.store_count)} selected stores`) : "ALL STORES"}</span><h2>Customer Journey: Cart to Payment</h2></div><span>{loading ? "Updating…" : report?.refreshed_at ? `Snapshot refreshed ${new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(report.refreshed_at))}` : ""}</span></div>
-      {loading && !report ? <div className="customer-journey-empty">Loading customer counts…</div> : stages.length ? <div className="customer-journey-chart-wrap">
+      <div className="customer-journey-chart-heading"><div><span className="panel-kicker">{report?.scope === "selected_stores" ? (report.store_count === 1 ? report.store_name : `${number(report.store_count)} selected stores`) : "ALL STORES"}</span><h2>Customer Journey: Cart to Payment</h2></div><div className="customer-journey-view-actions"><span>{loading ? "Updating…" : report?.refreshed_at ? `Snapshot refreshed ${new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(report.refreshed_at))}` : ""}</span><ChartTableViewToggle view={view} onChange={onViewChange} /></div></div>
+      {view === "table" ? <ReportDataTable headers={["Stage", "Customer count"]} rows={stages.map((item) => [item.stage, number(item.customer_count)])} emptyMessage="No customer journey snapshot is available for this selection." loading={loading} /> : loading && !report ? <div className="customer-journey-empty">Loading customer counts…</div> : stages.length ? <div className="customer-journey-chart-wrap">
         <svg className="customer-journey-chart" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label="Customer counts at cart, order, and payment stages">
           {ticks.map((tick) => {
             const y = baseline - (tick / max) * plotHeight;
@@ -926,6 +928,29 @@ function InventoryDemandList({ report }: { report: InventoryReport | null }) {
   </section>;
 }
 
+function ChartTableViewToggle({ view, onChange }: { view: "chart" | "table"; onChange: (view: "chart" | "table") => void }) {
+  return <div className="view-switch" role="group" aria-label="Report display">
+    <button type="button" className={view === "chart" ? "view-switch-active" : ""} aria-pressed={view === "chart"} onClick={() => onChange("chart")}>Chart</button>
+    <button type="button" className={view === "table" ? "view-switch-active" : ""} aria-pressed={view === "table"} onClick={() => onChange("table")}>Table</button>
+  </div>;
+}
+
+function ReportDataTable({ headers, rows, emptyMessage, loading = false }: { headers: string[]; rows: string[][]; emptyMessage: string; loading?: boolean }) {
+  if (loading && !rows.length) return <div className="table-empty">Loading report…</div>;
+  if (!rows.length) return <div className="chart-empty">{emptyMessage}</div>;
+  return <div className="table-scroll report-data-table-wrap"><table className="report-data-table">
+    <thead><tr>{headers.map((header) => <th key={header}>{header}</th>)}</tr></thead>
+    <tbody>{rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}</tr>)}</tbody>
+  </table></div>;
+}
+
+function ReportTablePanel({ kicker, title, headers, rows, emptyMessage, loading = false }: { kicker: string; title: string; headers: string[]; rows: string[][]; emptyMessage: string; loading?: boolean }) {
+  return <section className="panel report-table-panel">
+    <div className="panel-heading"><div><span className="panel-kicker">{kicker}</span><h2>{title}</h2></div><span className="row-count">{number(rows.length)} rows</span></div>
+    <ReportDataTable headers={headers} rows={rows} emptyMessage={emptyMessage} loading={loading} />
+  </section>;
+}
+
 function groupQuantityRows(rows: Report["quantity_records"]) {
   const grouped = new Map<number, { sku_id: number; sku_name: string; quantity: number }>();
   for (const row of rows) {
@@ -1061,6 +1086,7 @@ export default function App() {
   const [storeIds, setStoreIds] = useState<string[]>([]);
   const [chartLimit, setChartLimit] = useState(10);
   const [reportView, setReportView] = useState<"chart" | "table">("chart");
+  const [chartTableView, setChartTableView] = useState<"chart" | "table">("chart");
   const [activeSection, setActiveSection] = useState<"tables" | "sku" | "store" | "inventory" | "food-type" | "hourly" | "store-hourly" | "customers" | "repeat-customers" | "high-inventory" | "inventory-alerts" | "store-reviews" | "customer-journey">("tables");
   const [databaseTables, setDatabaseTables] = useState<DatabaseTable[]>([]);
   const [selectedTable, setSelectedTable] = useState("");
@@ -1071,6 +1097,7 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({ status: "idle", pid: null, started_at: null, finished_at: null, return_code: null, updated_tables: [] });
   const [syncToast, setSyncToast] = useState<"success" | "failure" | null>(null);
   const syncWasRunning = useRef(false);
+  useEffect(() => { setChartTableView("chart"); }, [activeSection]);
   const [storeMetric, setStoreMetric] = useState<StoreMetric>("item_sales_value");
   const [storeLimit, setStoreLimit] = useState<5 | 10>(5);
   const [report, setReport] = useState<Report | null>(null);
@@ -1328,6 +1355,7 @@ export default function App() {
     }
   }
 
+  const showChartTableSwitch = activeSection === "store" || activeSection === "food-type" || activeSection === "hourly" || activeSection === "customers" || activeSection === "repeat-customers" || activeSection === "high-inventory" || activeSection === "customer-journey";
   const invalidRange = !startDate || !endDate || startDate > endDate;
 
   function applyLastSevenDays() {
@@ -1386,6 +1414,23 @@ export default function App() {
     else if (activeSection === "high-inventory" && highInventoryReport) visibleReportData = { candidate_count: highInventoryReport.candidate_count, items: highInventoryReport.items.slice(0, 100) };
     else if (activeSection === "inventory-alerts" && inventoryAlertsReport) visibleReportData = inventoryAlertsReport;
   }
+  const storeTableRows = [...(storeReport?.stores ?? [])]
+    .sort((a, b) => b.item_sales_value - a.item_sales_value || a.store_name.localeCompare(b.store_name))
+    .map((store, index) => [String(index + 1), store.store_name, String(store.store_id), number(store.total_orders), number(store.total_customers ?? 0), number(store.total_quantity, 2), money(store.item_sales_value), money(store.average_order_value)]);
+  const foodTypeTableRows = [...(foodTypeReport?.food_types ?? [])]
+    .map((row) => ({ ...row, total_sales_value: Number(String(row.total_sales_value ?? 0).replace(/[₹,\s]/g, "")) }))
+    .sort((a, b) => b.total_sales_value - a.total_sales_value)
+    .map((row, index, rows) => [String(index + 1), row.food_type_name, number(row.total_orders), number(row.total_quantity_sold, 2), money(row.total_sales_value), `${number(rows.reduce((sum, item) => sum + item.total_sales_value, 0) ? row.total_sales_value / rows.reduce((sum, item) => sum + item.total_sales_value, 0) * 100 : 0, 1)}%`]);
+  const hourlyRowsByHour = new Map((hourlyReport?.hourly_sales ?? []).map((row) => [row.hour, row]));
+  const hourlyTableRows = Array.from({ length: 24 }, (_, hour) => {
+    const row = hourlyRowsByHour.get(hour);
+    return [`${String(hour).padStart(2, "0")}:00`, money(row?.total_sales_value ?? 0), number(row?.total_orders ?? 0)];
+  });
+  if ((hourlyReport?.unassigned.rows ?? 0) > 0) hourlyTableRows.push(["Unassigned hour", money(hourlyReport?.unassigned.total_sales_value ?? 0), number(hourlyReport?.unassigned.total_orders ?? 0)]);
+  const customerRows = (records: CustomerRecord[]) => records.slice(0, chartLimit).map((customer, index) => [String(index + 1), String(customer.customer_id), customer.customer_name, number(customer.total_orders), number(customer.total_quantity, 2), money(customer.total_sales), prettyDate(customer.last_order_date)]);
+  const customerSegmentTotal = (customerSegmentsReport?.segments ?? []).reduce((sum, segment) => sum + segment.customer_count, 0);
+  const customerSegmentRows = (customerSegmentsReport?.segments ?? []).map((segment) => [segment.customer_segment, number(segment.customer_count), `${number(customerSegmentTotal ? segment.customer_count / customerSegmentTotal * 100 : 0, 1)}%`, number(segment.total_orders), number(segment.total_quantity, 2), money(segment.total_sales)]);
+  const highInventoryTableRows = (highInventoryReport?.items ?? []).map((item, index) => [String(index + 1), prettyDate(item.report_date), String(item.sku_id), item.sku_name, item.store_name, number(item.stock_quantity), number(item.low_quantity_alert), number(item.sold_quantity_30day), money(item.inventory_value), money(item.sales_value_30day)]);
   const chartContext = activeSection === "tables" || activeSection === "store-reviews" || activeSection === "customer-journey" ? "" : JSON.stringify({
     report: reportTitles[activeSection],
     filters: {
@@ -1393,7 +1438,7 @@ export default function App() {
       end_date: endDate || null,
       stores: storeIds.map((id) => metadata?.stores.find((store) => String(store.store_id) === id)?.store_name ?? id),
     },
-    view: activeSection === "sku" ? reportView : "chart",
+    view: activeSection === "sku" ? reportView : showChartTableSwitch ? chartTableView : "chart",
     chart_data_loading: loading,
     data: visibleReportData,
   });
@@ -1468,9 +1513,11 @@ export default function App() {
         <div className="range-note">Presets use the latest available sales date: {prettyDate(metadata?.latest_date ?? null)}.</div>
       </section> : null}
 
+      {showChartTableSwitch ? <div className="report-view-toolbar"><span>View as</span><ChartTableViewToggle view={chartTableView} onChange={setChartTableView} /></div> : null}
+
       {error ? <div className="error-banner" role="alert"><span>!</span>{error}</div> : null}
 
-      {activeSection === "tables" ? <DatabaseTableBrowser tables={databaseTables} selectedTable={selectedTable} onSelect={(name) => { setSelectedTable(name); setTableOffset(0); }} preview={tablePreview} offset={tableOffset} onOffsetChange={setTableOffset} loading={tablesLoading} error={tableError} syncStatus={syncStatus} /> : activeSection === "inventory-alerts" ? <InventoryAlertTables report={inventoryAlertsReport} loading={loading} offset={inventoryAlertOffset} onOffsetChange={(offset) => void changeInventoryAlertPage(offset)} /> : activeSection === "store-reviews" ? <StoreFeedbackReviews startDate={startDate} endDate={endDate} storeIds={storeIds} refreshKey={storeReviewsRefreshKey} stores={metadata?.stores ?? []} /> : activeSection === "customer-journey" ? <CustomerJourneyPage storeIds={storeIds} refreshKey={customerJourneyRefreshKey} /> : activeSection === "sku" ? <>
+      {activeSection === "tables" ? <DatabaseTableBrowser tables={databaseTables} selectedTable={selectedTable} onSelect={(name) => { setSelectedTable(name); setTableOffset(0); }} preview={tablePreview} offset={tableOffset} onOffsetChange={setTableOffset} loading={tablesLoading} error={tableError} syncStatus={syncStatus} /> : activeSection === "inventory-alerts" ? <InventoryAlertTables report={inventoryAlertsReport} loading={loading} offset={inventoryAlertOffset} onOffsetChange={(offset) => void changeInventoryAlertPage(offset)} /> : activeSection === "store-reviews" ? <StoreFeedbackReviews startDate={startDate} endDate={endDate} storeIds={storeIds} refreshKey={storeReviewsRefreshKey} stores={metadata?.stores ?? []} /> : activeSection === "customer-journey" ? <CustomerJourneyPage storeIds={storeIds} refreshKey={customerJourneyRefreshKey} view={chartTableView} onViewChange={setChartTableView} /> : activeSection === "sku" ? <>
       <section className="panel trend-panel">
         <div className="panel-heading trend-heading">
           <div><span className="panel-kicker">{reportView === "chart" ? "QUANTITY + SALES VALUE" : "TOP SKU REPORTS"}</span><h2>{reportView === "chart" ? "Top SKU trends" : "Top SKU tables"}</h2></div>
@@ -1528,7 +1575,29 @@ export default function App() {
           </table>{loading && !report ? <div className="table-empty">Loading…</div> : null}</div>
         </article>
       </section> : null}
-      </> : activeSection === "store" ? <StorePerformanceChart stores={storeReport?.stores ?? []} metric={storeMetric} limit={storeLimit} onMetricChange={setStoreMetric} onLimitChange={setStoreLimit} /> : activeSection === "inventory" ? <InventoryDemandList report={inventoryReport} /> : activeSection === "food-type" ? <FoodTypeSalesChart report={foodTypeReport} /> : activeSection === "hourly" ? <HourlyStoreSalesChart report={hourlyReport} storeIds={storeIds} /> : activeSection === "store-hourly" ? <StoreHourlyPivot report={storeHourlyReport} /> : activeSection === "customers" ? <TopCustomersChart report={customerReport} limit={chartLimit} onLimitChange={(limit) => { setChartLimit(limit); if (startDate && endDate) void loadRange(startDate, endDate, limit); }} /> : activeSection === "repeat-customers" ? <RepeatCustomerSegmentsChart report={customerSegmentsReport} /> : <HighInventoryChart report={highInventoryReport} storeIds={storeIds} />}
+      </> : activeSection === "store" ? chartTableView === "table"
+        ? <ReportTablePanel kicker="STORE PERFORMANCE" title="Store performance data" headers={["Rank", "Store", "Store ID", "Orders", "Customers", "Quantity sold", "Sales value", "Average order value"]} rows={storeTableRows} emptyMessage="No store performance data found for this range." loading={loading} />
+        : <StorePerformanceChart stores={storeReport?.stores ?? []} metric={storeMetric} limit={storeLimit} onMetricChange={setStoreMetric} onLimitChange={setStoreLimit} />
+      : activeSection === "inventory" ? <InventoryDemandList report={inventoryReport} />
+      : activeSection === "food-type" ? chartTableView === "table"
+        ? <ReportTablePanel kicker="CATEGORY MIX" title="Sales by food type" headers={["Rank", "Food type", "Orders", "Quantity sold", "Sales value", "Share"]} rows={foodTypeTableRows} emptyMessage="No food type sales found for this date range." loading={loading} />
+        : <FoodTypeSalesChart report={foodTypeReport} />
+      : activeSection === "hourly" ? chartTableView === "table"
+        ? <ReportTablePanel kicker="SALES TIMING" title="Hourly sales" headers={["Hour", "Sales value", "Orders"]} rows={hourlyTableRows} emptyMessage="No hourly sales found for this date range." loading={loading} />
+        : <HourlyStoreSalesChart report={hourlyReport} storeIds={storeIds} />
+      : activeSection === "store-hourly" ? <StoreHourlyPivot report={storeHourlyReport} />
+      : activeSection === "customers" ? chartTableView === "table"
+        ? <section className="dual-table-grid">
+            <ReportTablePanel kicker="CUSTOMER PERFORMANCE · ORDERS" title="Top customers by orders" headers={["Rank", "Customer ID", "Customer", "Orders", "Quantity", "Sales value", "Last order"]} rows={customerRows(customerReport?.top_by_orders ?? [])} emptyMessage="No customer order data found for this range." loading={loading} />
+            <ReportTablePanel kicker="CUSTOMER PERFORMANCE · SALES" title="Top customers by sales" headers={["Rank", "Customer ID", "Customer", "Orders", "Quantity", "Sales value", "Last order"]} rows={customerRows(customerReport?.top_by_sales ?? [])} emptyMessage="No customer sales data found for this range." loading={loading} />
+          </section>
+        : <TopCustomersChart report={customerReport} limit={chartLimit} onLimitChange={(limit) => { setChartLimit(limit); if (startDate && endDate) void loadRange(startDate, endDate, limit); }} />
+      : activeSection === "repeat-customers" ? chartTableView === "table"
+        ? <ReportTablePanel kicker="CUSTOMER MIX" title="Repeat and one-time customers" headers={["Segment", "Customers", "Share", "Orders", "Quantity", "Sales value"]} rows={customerSegmentRows} emptyMessage="No customer segment data found for this date range." loading={loading} />
+        : <RepeatCustomerSegmentsChart report={customerSegmentsReport} />
+      : chartTableView === "table"
+        ? <ReportTablePanel kicker="INVENTORY ALERT" title="High inventory, low sales" headers={["Rank", "Snapshot", "SKU ID", "Product", "Store", "Stock", "Low-stock alert", "30-day units sold", "Inventory value", "30-day sales"]} rows={highInventoryTableRows} emptyMessage="No high-inventory, low-sales items found for this selection." loading={loading} />
+        : <HighInventoryChart report={highInventoryReport} storeIds={storeIds} />}
       <ChatWidget chartContext={chartContext} />
     </main>
   );

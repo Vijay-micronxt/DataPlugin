@@ -15,7 +15,7 @@ Copy-Item .env.example .env
 python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-The backend loads `backend/.env` automatically at startup. Set `MYSQL_HOST`, `MYSQL_DATABASE`, `MYSQL_USER`, and `MYSQL_PASSWORD`; `MYSQL_PORT` defaults to `3306`. Keep `.env` private and do not commit it. The dashboard opens on **MySQL Tables**, which lists tables and columns from the configured database and previews rows 100 at a time. It reads table metadata from `INFORMATION_SCHEMA` and only selects data from the chosen table. **Run incremental sync** launches `E:\fetching\sync_incremental.py` with the API's Python interpreter and environment; detailed logs are written to `E:\fetching\logs\incremental_sync.log`. The analytics report pages still expect the separate prepared analytics schema. The browser app runs on `http://localhost:5173`; set `CORS_ORIGINS` in `.env` if its origin differs.
+The backend loads `backend/.env` automatically at startup. Set `MYSQL_HOST`, `MYSQL_DATABASE`, `MYSQL_USER`, and `MYSQL_PASSWORD`; `MYSQL_PORT` defaults to `3306`. Keep `.env` private and do not commit it. The dashboard opens on **MySQL Tables**, which lists tables and columns from the configured database and previews rows 100 at a time. It reads table metadata from `INFORMATION_SCHEMA` and only selects data from the chosen table. **Run incremental sync** launches `fetching/sync_incremental.py` from this repository; sync settings are read from `fetching/.env`, and logs are written to `fetching/logs/incremental_sync.log`. The analytics report pages still expect the separate prepared analytics schema. The browser app runs on `http://localhost:5173`; set `CORS_ORIGINS` in `.env` if its origin differs.
 
 ## Routes
 
