@@ -9,7 +9,7 @@ The repository contains **synthetic demo data**, not production D2 records. A ne
 - Windows 10/11, PowerShell, and Git.
 - 64-bit standard CPython 3.12. Standard CPython 3.13 also works; avoid a free-threaded build such as `3.13t`.
 - Node.js 20 LTS or newer (includes npm).
-- Docker Desktop with Docker Compose for the easiest demo database setup. Or install/reuse MySQL 8.0+ locally; MySQL Workbench can be used instead of the `mysql` command-line client to import SQL.
+- MySQL Community Server 8.0+ installed and running locally. The [official MySQL Installer for Windows](https://dev.mysql.com/downloads/installer/) can install the server; MySQL Workbench is optional and can import the demo SQL if the MySQL command-line client is not on `PATH`.
 - Internet access to install Python/npm packages. AI chat also needs a key or endpoint for a configured model provider.
 
 In GitHub, select the `feature/dashboard` branch before cloning; that branch contains the ETL scripts and demo SQL. If the repository is already cloned on a different branch, switch to it from the repository root:
@@ -34,21 +34,19 @@ If you installed standard CPython 3.13 instead, replace `py -3.12` with `py -3.1
 
 ### Option A: run the demo
 
-The demo patch creates a separate `dashboard_demo` database and fills it with synthetic rows for the reports. The recommended path uses Docker Desktop to start MySQL and import the patch automatically:
+The demo patch creates a separate `dashboard_demo` database and fills it with synthetic rows for the reports. Start the MySQL Windows service (open `services.msc`; the service is commonly named `MySQL80`). You can check its status in PowerShell with:
 
 ```powershell
-docker compose up -d --wait mysql
+Get-Service *mysql*
 ```
 
-The container publishes MySQL only on `127.0.0.1:3307`. For this synthetic demo only, it allows a passwordless local root connection. In both API `.env` files, use `MYSQL_HOST=127.0.0.1`, `MYSQL_PORT=3307`, `MYSQL_DATABASE=dashboard_demo`, `MYSQL_USER=root`, and leave `MYSQL_PASSWORD` blank. Do not use this passwordless configuration with real data or expose the MySQL port to other machines. For a separately installed MySQL server, use your own credentials; the API only needs `SELECT` access to the demo schema.
-
-If you already have a local MySQL server, import `duckdb/database/demo_database_patch.sql` from the repository root using an account allowed to create databases/tables and insert rows:
+Then import `duckdb/database/demo_database_patch.sql` from the repository root using a MySQL account allowed to create databases/tables and insert rows:
 
 ```powershell
 cmd.exe /c 'mysql --user=root --password < "duckdb\database\demo_database_patch.sql"'
 ```
 
-Or open the SQL file in MySQL Workbench and run it. For local MySQL, use its host, port, username, and password in the API `.env` files (the usual port is `3306`). Use the patch only in a local/demo environment; it seeds synthetic rows and is not a production migration. A local runtime API account only needs `SELECT` on `dashboard_demo` and access to `INFORMATION_SCHEMA`.
+Or open the SQL file in MySQL Workbench and run it. In both API `.env` files, set `MYSQL_HOST=127.0.0.1`, `MYSQL_PORT=3306` (or your MySQL port), `MYSQL_DATABASE=dashboard_demo`, and your local MySQL username/password. Use the patch only in a local/demo environment; it seeds synthetic rows and is not a production migration. A local runtime API account only needs `SELECT` on `dashboard_demo` and access to `INFORMATION_SCHEMA`.
 
 Copy the API templates without overwriting existing local settings:
 
@@ -136,7 +134,7 @@ Open the Vite URL shown in the terminal, normally <http://localhost:5173>. Use `
 - **Missing tables or an empty dashboard:** In demo mode, import the demo patch. In ETL mode, create the destination schema, configure `fetching/.env`, run the sync, and check `fetching/logs/incremental_sync.log`. The source schema must match the ETLs.
 - **ETL login or permission error:** Check source credentials and network/IP allowlisting. The source needs read access; the destination needs the write/DDL permissions listed above. Also check `ETL_SALES_POLICY` and the source status names.
 - **CORS error:** Use `http://localhost:5173`, or set both API CORS settings for the exact origin. In `duckdb/backend/.env`, set `CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173`. In `Fast API/backend/.env`, set `FRONTEND_ORIGIN` to the same comma-separated origins, then restart the APIs.
-- **Port is already in use:** Stop the other process or choose a free port. If Docker reports port `3307` is busy, change the host side of the MySQL mapping in `compose.yaml` and set the same `MYSQL_PORT` in both API `.env` files. If changing the dashboard API port, update the `/api` proxy in `duckdb/frontend/vite.config.ts`. If changing the chat API port, set `VITE_CHAT_API_BASE` for the frontend and update `FRONTEND_ORIGIN` as needed.
+- **MySQL is unavailable or its port is busy:** Confirm the MySQL Windows service is running and listening on the port in both API `.env` files (normally `3306`). If the port differs, update `MYSQL_PORT`. If another application occupies dashboard port `8000`, update the `/api` proxy in `duckdb/frontend/vite.config.ts`; for chat port `8002`, set `VITE_CHAT_API_BASE` and update `FRONTEND_ORIGIN` as needed.
 - **PowerShell blocks `npm`:** Run `npm.cmd` instead of `npm`.
 - **Python package or native install errors:** Confirm you used 64-bit standard CPython, not a free-threaded build, and recreated `.venv` with the intended Python version.
 
