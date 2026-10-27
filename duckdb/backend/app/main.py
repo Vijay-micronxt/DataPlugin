@@ -26,8 +26,10 @@ app = FastAPI(
 )
 logger = logging.getLogger(__name__)
 
-SYNC_SCRIPT = Path(r"E:\fetching\sync_incremental.py")
-SYNC_LOG = Path(r"E:\fetching\logs\incremental_sync.log")
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+FETCHING_DIR = PROJECT_ROOT / "fetching"
+SYNC_SCRIPT = FETCHING_DIR / "sync_incremental.py"
+SYNC_LOG = FETCHING_DIR / "logs" / "incremental_sync.log"
 _sync_lock = threading.Lock()
 _sync_process: subprocess.Popen | None = None
 _sync_log_offset = 0

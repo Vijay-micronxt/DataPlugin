@@ -24,7 +24,7 @@ from services.openrouter_service import OpenRouterService
 ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(Path(__file__).resolve().parent / '.env')
 STORE_PATH = Path(os.getenv('CONVERSATION_DB_PATH', str(ROOT / 'backend/data/conversations.sqlite3'))).resolve()
-MYSQL_DATABASE = os.getenv('MYSQL_DATABASE', 'dashboard').strip()
+MYSQL_DATABASE = os.getenv('MYSQL_DATABASE', 'dashboard_demo').strip()
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-3.5-flash-lite')
 # Snapshot of generateContent models available to this configured key when live
@@ -43,7 +43,7 @@ GEMINI_MODEL_FALLBACKS = [
     'gemini-3.8-flash-lite-tts', 'gemini-robotics-er-2-preview',
     'gemini-2.5-computer-use-preview-10-2025',
 ]
-KAGGLE_BASE_URL = os.getenv('OLLAMA_BASE_URL', 'https://kaggle-proxy.subash-chatbot.workers.dev/v1')
+KAGGLE_BASE_URL = os.getenv('OLLAMA_BASE_URL', '')
 KAGGLE_DEFAULT_MODEL = os.getenv('OLLAMA_MODEL', '')
 KAGGLE_API_KEY = os.getenv('OLLAMA_API_KEY', '')
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')

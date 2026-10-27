@@ -7,10 +7,10 @@
 Install `duckdb`, `mysql-connector-python`, and `pandas` for Python, then set the non-secret connection fields in PowerShell. The builder prompts for the password if `MYSQL_PASSWORD` is not set.
 
 ```powershell
-$env:MYSQL_HOST = "storenxt-dev-rds.cbvv9r9yo56i.ap-south-1.rds.amazonaws.com"
+$env:MYSQL_HOST = "your_mysql_host"
 $env:MYSQL_PORT = "3306"
-$env:MYSQL_DATABASE = "storenxt_dev_d2"
-$env:MYSQL_USER = "admin"
+$env:MYSQL_DATABASE = "your_source_database"
+$env:MYSQL_USER = "your_mysql_user"
 python .\build_d2_analytics.py
 ```
 
