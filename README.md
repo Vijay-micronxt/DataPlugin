@@ -32,6 +32,13 @@ If you installed standard CPython 3.13 instead, replace `py -3.12` with `py -3.1
 
 ## 2. Choose and configure a database
 
+Copy the API templates once, without overwriting existing local settings:
+
+```powershell
+if (-not (Test-Path "duckdb\backend\.env")) { Copy-Item "duckdb\backend\.env.example" "duckdb\backend\.env" }
+if (-not (Test-Path "Fast API\backend\.env")) { Copy-Item "Fast API\backend\.env.example" "Fast API\backend\.env" }
+```
+
 ### Option A: run the demo
 
 The demo patch creates a separate `dashboard_demo` database and fills it with synthetic rows for the reports. Start the MySQL Windows service (open `services.msc`; the service is commonly named `MySQL80`). You can check its status in PowerShell with:
@@ -46,14 +53,7 @@ Then import `duckdb/database/demo_database_patch.sql` from the repository root u
 cmd.exe /c 'mysql --user=root --password < "duckdb\database\demo_database_patch.sql"'
 ```
 
-Or open the SQL file in MySQL Workbench and run it. In both API `.env` files, set `MYSQL_HOST=127.0.0.1`, `MYSQL_PORT=3306` (or your MySQL port), `MYSQL_DATABASE=dashboard_demo`, and your local MySQL username/password. Use the patch only in a local/demo environment; it seeds synthetic rows and is not a production migration. A local runtime API account only needs `SELECT` on `dashboard_demo` and access to `INFORMATION_SCHEMA`.
-
-Copy the API templates without overwriting existing local settings:
-
-```powershell
-if (-not (Test-Path "duckdb\backend\.env")) { Copy-Item "duckdb\backend\.env.example" "duckdb\backend\.env" }
-if (-not (Test-Path "Fast API\backend\.env")) { Copy-Item "Fast API\backend\.env.example" "Fast API\backend\.env" }
-```
+Or open the SQL file in MySQL Workbench and run it. In `duckdb/backend/.env`, set `MYSQL_HOST=127.0.0.1`, `MYSQL_PORT=3306` (or your MySQL port), `MYSQL_DATABASE=dashboard_demo`, and your local MySQL username/password. Use the patch only in a local/demo environment; it seeds synthetic rows and is not a production migration. The dashboard API only needs `SELECT` on `dashboard_demo` and normal access to `INFORMATION_SCHEMA`.
 
 Edit `duckdb/backend/.env` and set `MYSQL_HOST`, `MYSQL_USER`, and `MYSQL_PASSWORD` to a local MySQL account. Set `MYSQL_DATABASE=dashboard_demo`. The dashboard API only needs `SELECT` access to this schema (and normal access to MySQL `INFORMATION_SCHEMA`). If you want the chat API too, make the same database settings in `Fast API/backend/.env`. Add your own `GEMINI_API_KEY` there to get Gemini responses; without a model provider key, the chat API can start but cannot generate AI replies.
 
@@ -61,9 +61,15 @@ The SQL import account needs permission to create the demo database and its tabl
 
 ### Option B: sync your own D2 data
 
-This option requires access to a D2 MySQL source with the schema expected by the ETLs. At minimum, the scripts read `materialized_orders`, `materialized_order_items`, and related tables such as `stores`, `skus`, `food_types`, `sku_daily_snapshots`, payment records, and order ratings. The source account needs `SELECT` access to the tables used by the ETLs and network access to the MySQL server.
+This option requires access to a D2 MySQL source with the schema expected by the ETLs. At minimum, the scripts read `materialized_orders`, `materialized_order_items`, and related tables such as `stores`, `skus`, `food_types`, `sku_daily_snapshots`, payment records, and order ratings. The source account needs `SELECT` access to the tables used by the ETLs and network access to the MySQL server. See [`fetching/README.md`](fetching/README.md) for the complete source mapping.
 
-The ETL writes reports and checkpoint/ledger tables to a **separate destination database**. Create that database first; the ETLs create and manage tables inside it. Use a dedicated destination schema because some ETLs replace or rebuild report tables. Grant the ETL account `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `CREATE`, `ALTER`, and `DROP` access on that destination schema. The source database is read-only to these scripts.
+The ETL writes reports and checkpoint/ledger tables to a **separate destination database**. Create an empty database first; the ETLs create and manage tables inside it. For a local MySQL destination, run this once from the repository root (change the schema name if desired):
+
+```powershell
+cmd.exe /c 'mysql --user=root --password --execute="CREATE DATABASE dashboard_analytics CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"'
+```
+
+You can also create the schema in MySQL Workbench. Use a dedicated destination database because some ETLs replace or rebuild report tables; do not point them at a production schema or the demo schema. Grant the ETL account `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `CREATE`, `ALTER`, and `DROP` access on that destination schema. The source database is read-only to these scripts.
 
 Create the fetching settings file if it does not exist, then edit it locally:
 
@@ -71,9 +77,9 @@ Create the fetching settings file if it does not exist, then edit it locally:
 if (-not (Test-Path "fetching\.env")) { Copy-Item "fetching\.env.example" "fetching\.env" }
 ```
 
-In `fetching/.env`, set `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, and `DB_PASSWORD` for the D2 **source**. Set `DEST_HOST`, `DEST_PORT`, `DEST_DATABASE`, `DEST_USER`, and `DEST_PASSWORD` for the **destination**. Choose `ETL_SALES_POLICY` based on your business rules (`delivered_gross` or `noncancelled_gross`); review [`fetching/README.md`](fetching/README.md) for the source mapping, report definitions, and other ETL settings.
+In `fetching/.env`, set `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, and `DB_PASSWORD` for the D2 **source**. Set `DEST_HOST`, `DEST_PORT`, `DEST_DATABASE`, `DEST_USER`, and `DEST_PASSWORD` for the **destination**; `DEST_DATABASE` must be the schema you created above. Choose `ETL_SALES_POLICY` based on your business rules (`delivered_gross` or `noncancelled_gross`). The example leaves this choice empty intentionally; configure it before syncing. Review [`fetching/README.md`](fetching/README.md) for the source mapping, report definitions, and other ETL settings.
 
-Set `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USER`, and `MYSQL_PASSWORD` in each API `.env` to the destination database so the dashboard and chat read the tables written by the ETL. `MYSQL_DATABASE` must match `DEST_DATABASE`. If you configure only the demo database, the **Run incremental sync** button will not work because it also requires valid source and destination values in `fetching/.env`.
+In `duckdb/backend/.env`, set `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USER`, and `MYSQL_PASSWORD` for the analytics destination. Set `MYSQL_DATABASE` to the same schema name as `DEST_DATABASE`. The API account only needs read access; it can be separate from the ETL writer account. If you want chat too, set the same destination database in `Fast API/backend/.env` and configure a model key there. If you configure only the demo database, the **Run incremental sync** button will not work because it also requires valid source and destination values in `fetching/.env`.
 
 After the database settings and permissions are in place, you can start one sync manually from the repository root:
 
