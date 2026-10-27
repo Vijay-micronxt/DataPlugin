@@ -216,7 +216,7 @@ ORDER BY FIELD(journey_stage,'Cart','Order','Payment');
 ```powershell
 python export_dashboard_to_duckdb.py --dry-run
 python export_dashboard_to_duckdb.py
-python export_dashboard_to_duckdb.py --output "E:\\data\\dashboard.duckdb"
+python export_dashboard_to_duckdb.py --output ".\\dashboard.duckdb"
 ```
 
 ## Low sales and high inventory
